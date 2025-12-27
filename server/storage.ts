@@ -1,4 +1,4 @@
-import { products, type Product, type InsertProduct, type User, type Order } from "@shared/schema";
+import { products, users, orders, type Product, type InsertProduct, type User, type Order, type InsertOrder } from "@shared/schema";
 
 export interface IStorage {
   getProducts(params?: {
@@ -9,14 +9,9 @@ export interface IStorage {
     condition?: string;
   }): Promise<Product[]>;
   getProduct(id: number): Promise<Product | undefined>;
-  
-  // Auth
   getUserByPhone(phone: string): Promise<User | undefined>;
-  createUser(user: Omit<User, "id">): Promise<User>;
-  
-  // Orders
   getOrders(userId: number): Promise<Order[]>;
-  createOrder(userId: number, order: Omit<Order, "id" | "userId" | "createdAt" | "status">): Promise<Order>;
+  createOrder(order: InsertOrder): Promise<Order>;
 }
 
 export class MemStorage implements IStorage {
@@ -38,11 +33,11 @@ export class MemStorage implements IStorage {
   }
 
   private initializeMockData() {
-    // Products
-    const mockProducts: InsertProduct[] = [
+    // Initial products
+    const mockProducts: any[] = [
       {
         name: "iPhone 13 Pro (Refurbished)",
-        description: "128GB, Sierra Blue. Fully tested and certified. Minimal signs of wear.",
+        description: "128GB, Sierra Blue. Fully tested and certified.",
         price: 45999,
         originalPrice: 119900,
         category: "Phones",
@@ -54,36 +49,6 @@ export class MemStorage implements IStorage {
         specs: { ram: "6GB", storage: "128GB", processor: "A15 Bionic" },
         stock: 5,
         isFeatured: true
-      },
-      {
-        name: "Samsung Galaxy S22 Ultra",
-        description: "Phantom Black, 256GB. Excellent camera performance. S-Pen included.",
-        price: 52999,
-        originalPrice: 109999,
-        category: "Phones",
-        brand: "Samsung",
-        condition: "Good",
-        conditionScore: 88,
-        warrantyMonths: 6,
-        images: ["https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?auto=format&fit=crop&q=80&w=800"],
-        specs: { ram: "12GB", storage: "256GB", processor: "Snapdragon 8 Gen 1" },
-        stock: 3,
-        isFeatured: true
-      },
-      {
-        name: "MacBook Air M1",
-        description: "Space Grey, 8GB RAM, 256GB SSD. Best value laptop. Battery cycle count: 45.",
-        price: 55000,
-        originalPrice: 99900,
-        category: "Laptops",
-        brand: "Apple",
-        condition: "Excellent",
-        conditionScore: 98,
-        warrantyMonths: 12,
-        images: ["https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&q=80&w=800"],
-        specs: { ram: "8GB", storage: "256GB", processor: "M1" },
-        stock: 8,
-        isFeatured: true
       }
     ];
 
@@ -92,49 +57,39 @@ export class MemStorage implements IStorage {
       this.products.set(id, { ...p, id });
     });
 
-    // Dummy User
+    // Initial dummy user
     const dummyUser: User = {
-      id: this.currentUserId++,
+      id: 1,
       phone: "77575758",
-      password: "yesimgreat",
-      name: "John Doe"
+      password: "yesimgreat"
     };
     this.users.set(dummyUser.id, dummyUser);
+    this.currentUserId = 2;
 
-    // Dummy Order for Tracking
+    // Initial dummy order
     const dummyOrder: Order = {
-      id: this.currentOrderId++,
-      userId: dummyUser.id,
-      items: [
-        { productId: 1, name: "iPhone 13 Pro (Refurbished)", quantity: 1, price: 45999 }
-      ],
+      id: 1,
+      userId: 1,
       total: 45999,
       status: "Shipped",
-      createdAt: new Date(),
-      address: "123, Tech Street, Silicon Valley"
+      items: [{ productId: 1, name: "iPhone 13 Pro", quantity: 1, price: 45999 }],
+      address: "123 Tech Park, Bangalore, KA",
+      createdAt: new Date()
     };
     this.orders.set(dummyOrder.id, dummyOrder);
+    this.currentOrderId = 2;
   }
 
-  async getProducts(params?: {
-    search?: string;
-    category?: string;
-    minPrice?: number;
-    maxPrice?: number;
-    condition?: string;
-  }): Promise<Product[]> {
+  async getProducts(params?: any): Promise<Product[]> {
     let results = Array.from(this.products.values());
     if (params) {
       if (params.search) {
         const query = params.search.toLowerCase();
-        results = results.filter(p => p.name.toLowerCase().includes(query) || p.brand.toLowerCase().includes(query));
+        results = results.filter(p => p.name.toLowerCase().includes(query));
       }
       if (params.category && params.category !== "All") {
         results = results.filter(p => p.category === params.category);
       }
-      if (params.minPrice) results = results.filter(p => p.price >= params.minPrice!);
-      if (params.maxPrice) results = results.filter(p => p.price <= params.maxPrice!);
-      if (params.condition) results = results.filter(p => p.condition === params.condition);
     }
     return results;
   }
@@ -147,28 +102,15 @@ export class MemStorage implements IStorage {
     return Array.from(this.users.values()).find(u => u.phone === phone);
   }
 
-  async createUser(user: Omit<User, "id">): Promise<User> {
-    const id = this.currentUserId++;
-    const newUser = { ...user, id };
-    this.users.set(id, newUser);
-    return newUser;
-  }
-
   async getOrders(userId: number): Promise<Order[]> {
     return Array.from(this.orders.values()).filter(o => o.userId === userId);
   }
 
-  async createOrder(userId: number, order: Omit<Order, "id" | "userId" | "createdAt" | "status">): Promise<Order> {
+  async createOrder(insertOrder: InsertOrder): Promise<Order> {
     const id = this.currentOrderId++;
-    const newOrder: Order = {
-      ...order,
-      id,
-      userId,
-      status: "Pending",
-      createdAt: new Date()
-    };
-    this.orders.set(id, newOrder);
-    return newOrder;
+    const order: Order = { ...insertOrder, id, createdAt: new Date() };
+    this.orders.set(id, order);
+    return order;
   }
 }
 
