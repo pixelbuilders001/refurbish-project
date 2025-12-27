@@ -1,18 +1,25 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  price: integer("price").notNull(), // In Rupees
+  originalPrice: integer("original_price").notNull(),
+  category: text("category").notNull(), // 'Phones', 'Laptops', 'Accessories'
+  brand: text("brand").notNull(),
+  condition: text("condition").notNull(), // 'Excellent', 'Good', 'Fair'
+  conditionScore: integer("condition_score").notNull(), // 0-100
+  warrantyMonths: integer("warranty_months").notNull(),
+  images: text("images").array().notNull(),
+  specs: jsonb("specs").notNull(), // { ram: "8GB", storage: "256GB", processor: "M1" }
+  stock: integer("stock").notNull().default(1),
+  isFeatured: boolean("is_featured").default(false),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
+export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = z.infer<typeof insertProductSchema>;
