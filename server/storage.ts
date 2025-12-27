@@ -1,4 +1,4 @@
-import { products, type Product, type InsertProduct } from "@shared/schema";
+import { products, type Product, type InsertProduct, type User, type Order } from "@shared/schema";
 
 export interface IStorage {
   getProducts(params?: {
@@ -9,19 +9,36 @@ export interface IStorage {
     condition?: string;
   }): Promise<Product[]>;
   getProduct(id: number): Promise<Product | undefined>;
+  
+  // Auth
+  getUserByPhone(phone: string): Promise<User | undefined>;
+  createUser(user: Omit<User, "id">): Promise<User>;
+  
+  // Orders
+  getOrders(userId: number): Promise<Order[]>;
+  createOrder(userId: number, order: Omit<Order, "id" | "userId" | "createdAt" | "status">): Promise<Order>;
 }
 
 export class MemStorage implements IStorage {
   private products: Map<number, Product>;
-  private currentId: number;
+  private users: Map<number, User>;
+  private orders: Map<number, Order>;
+  private currentProductId: number;
+  private currentUserId: number;
+  private currentOrderId: number;
 
   constructor() {
     this.products = new Map();
-    this.currentId = 1;
+    this.users = new Map();
+    this.orders = new Map();
+    this.currentProductId = 1;
+    this.currentUserId = 1;
+    this.currentOrderId = 1;
     this.initializeMockData();
   }
 
   private initializeMockData() {
+    // Products
     const mockProducts: InsertProduct[] = [
       {
         name: "iPhone 13 Pro (Refurbished)",
@@ -67,58 +84,36 @@ export class MemStorage implements IStorage {
         specs: { ram: "8GB", storage: "256GB", processor: "M1" },
         stock: 8,
         isFeatured: true
-      },
-      {
-        name: "Dell XPS 13",
-        description: "InfinityEdge display, lightweight and powerful. Ideal for professionals.",
-        price: 48000,
-        originalPrice: 110000,
-        category: "Laptops",
-        brand: "Dell",
-        condition: "Fair",
-        conditionScore: 75,
-        warrantyMonths: 3,
-        images: ["https://images.unsplash.com/photo-1593642632823-8f78536788c6?auto=format&fit=crop&q=80&w=800"],
-        specs: { ram: "16GB", storage: "512GB", processor: "Intel i7" },
-        stock: 2,
-        isFeatured: false
-      },
-      {
-        name: "OnePlus 9 Pro",
-        description: "Hasselblad Camera for Mobile. Fast charging. 120Hz Fluid Display.",
-        price: 28999,
-        originalPrice: 64999,
-        category: "Phones",
-        brand: "OnePlus",
-        condition: "Good",
-        conditionScore: 85,
-        warrantyMonths: 6,
-        images: ["https://images.unsplash.com/photo-1619948834614-4b53ef9173d1?auto=format&fit=crop&q=80&w=800"],
-        specs: { ram: "8GB", storage: "128GB", processor: "Snapdragon 888" },
-        stock: 4,
-        isFeatured: false
-      },
-      {
-        name: "Sony WH-1000XM4",
-        description: "Industry-leading noise canceling. 30 hours battery life.",
-        price: 14999,
-        originalPrice: 29990,
-        category: "Accessories",
-        brand: "Sony",
-        condition: "Excellent",
-        conditionScore: 92,
-        warrantyMonths: 6,
-        images: ["https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?auto=format&fit=crop&q=80&w=800"],
-        specs: { type: "Over-ear", battery: "30h", connectivity: "Bluetooth" },
-        stock: 10,
-        isFeatured: true
       }
     ];
 
     mockProducts.forEach(p => {
-      const id = this.currentId++;
+      const id = this.currentProductId++;
       this.products.set(id, { ...p, id });
     });
+
+    // Dummy User
+    const dummyUser: User = {
+      id: this.currentUserId++,
+      phone: "77575758",
+      password: "yesimgreat",
+      name: "John Doe"
+    };
+    this.users.set(dummyUser.id, dummyUser);
+
+    // Dummy Order for Tracking
+    const dummyOrder: Order = {
+      id: this.currentOrderId++,
+      userId: dummyUser.id,
+      items: [
+        { productId: 1, name: "iPhone 13 Pro (Refurbished)", quantity: 1, price: 45999 }
+      ],
+      total: 45999,
+      status: "Shipped",
+      createdAt: new Date(),
+      address: "123, Tech Street, Silicon Valley"
+    };
+    this.orders.set(dummyOrder.id, dummyOrder);
   }
 
   async getProducts(params?: {
@@ -129,34 +124,51 @@ export class MemStorage implements IStorage {
     condition?: string;
   }): Promise<Product[]> {
     let results = Array.from(this.products.values());
-
     if (params) {
       if (params.search) {
         const query = params.search.toLowerCase();
-        results = results.filter(p => 
-          p.name.toLowerCase().includes(query) || 
-          p.brand.toLowerCase().includes(query)
-        );
+        results = results.filter(p => p.name.toLowerCase().includes(query) || p.brand.toLowerCase().includes(query));
       }
       if (params.category && params.category !== "All") {
         results = results.filter(p => p.category === params.category);
       }
-      if (params.minPrice) {
-        results = results.filter(p => p.price >= params.minPrice!);
-      }
-      if (params.maxPrice) {
-        results = results.filter(p => p.price <= params.maxPrice!);
-      }
-      if (params.condition) {
-        results = results.filter(p => p.condition === params.condition);
-      }
+      if (params.minPrice) results = results.filter(p => p.price >= params.minPrice!);
+      if (params.maxPrice) results = results.filter(p => p.price <= params.maxPrice!);
+      if (params.condition) results = results.filter(p => p.condition === params.condition);
     }
-
     return results;
   }
 
   async getProduct(id: number): Promise<Product | undefined> {
     return this.products.get(id);
+  }
+
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(u => u.phone === phone);
+  }
+
+  async createUser(user: Omit<User, "id">): Promise<User> {
+    const id = this.currentUserId++;
+    const newUser = { ...user, id };
+    this.users.set(id, newUser);
+    return newUser;
+  }
+
+  async getOrders(userId: number): Promise<Order[]> {
+    return Array.from(this.orders.values()).filter(o => o.userId === userId);
+  }
+
+  async createOrder(userId: number, order: Omit<Order, "id" | "userId" | "createdAt" | "status">): Promise<Order> {
+    const id = this.currentOrderId++;
+    const newOrder: Order = {
+      ...order,
+      id,
+      userId,
+      status: "Pending",
+      createdAt: new Date()
+    };
+    this.orders.set(id, newOrder);
+    return newOrder;
   }
 }
 

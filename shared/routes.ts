@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { products, insertProductSchema } from './schema';
+import { products, users, orders } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -9,12 +9,42 @@ export const errorSchemas = {
   notFound: z.object({
     message: z.string(),
   }),
+  unauthorized: z.object({
+    message: z.string(),
+  }),
   internal: z.object({
     message: z.string(),
   }),
 };
 
 export const api = {
+  auth: {
+    login: {
+      method: 'POST' as const,
+      path: '/api/auth/login',
+      input: z.object({
+        phone: z.string(),
+        password: z.string(),
+      }),
+      responses: {
+        200: z.custom<typeof users.$inferSelect>(),
+        401: errorSchemas.unauthorized,
+      },
+    },
+    register: {
+      method: 'POST' as const,
+      path: '/api/auth/register',
+      input: z.object({
+        phone: z.string(),
+        password: z.string(),
+        name: z.string(),
+      }),
+      responses: {
+        200: z.custom<typeof users.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+  },
   products: {
     list: {
       method: 'GET' as const,
@@ -36,6 +66,27 @@ export const api = {
       responses: {
         200: z.custom<typeof products.$inferSelect>(),
         404: errorSchemas.notFound,
+      },
+    },
+  },
+  orders: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/orders',
+      responses: {
+        200: z.array(z.custom<typeof orders.$inferSelect>()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/orders',
+      input: z.object({
+        items: z.array(z.any()),
+        total: z.number(),
+        address: z.string(),
+      }),
+      responses: {
+        201: z.custom<typeof orders.$inferSelect>(),
       },
     },
   },
